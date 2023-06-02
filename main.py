@@ -1,9 +1,10 @@
 import backtrader as bt
 import yfinance as yf
 
-# Define trading strategy
-from matplotlib import pyplot as plt
 
+START_DATE = '2021-01-01'
+END_DATE = '2022-12-31'
+STOCK_TICKER = 'AAPL'
 
 class MyStrategy(bt.Strategy):
     def __init__(self):
@@ -60,18 +61,24 @@ class MyStrategy(bt.Strategy):
         if self.order:
             return
 
+        # Check if we are in the market
         if not self.position:
-            if self.sma_fast[0] > self.sma_slow[0]:
+            # We are not in the market, if RSI < 30 then buy
+            if self.rsi[0] < 30:
                 self.log('BUY CREATE, %.2f' % self.data.close[0])
                 self.order = self.buy()
-        elif self.sma_fast[0] < self.sma_slow[0]:
-            self.log('SELL, %.2f' % self.data.close[0])
-            self.order = self.sell()
+
+        else:
+            # We are in the market, if RSI > 70 then sell
+            if self.rsi[0] > 70:
+                self.log('SELL CREATE, %.2f' % self.data.close[0])
+                self.order = self.sell()
+
         self.log('Close, %.2f' % self.data.close[0])
 
 
 # Download data
-data = yf.download('AAPL', '2010-01-01', '2022-12-31')
+data = yf.download(STOCK_TICKER, START_DATE, END_DATE)
 
 # Create a data feed
 data_feed = bt.feeds.PandasData(dataname=data)
