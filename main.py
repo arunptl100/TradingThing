@@ -1,14 +1,14 @@
 import backtrader as bt
 import yfinance as yf
 
-START_DATE = '2023-06-10'
+START_DATE = '2023-06-15'
 END_DATE = '2023-06-16'
 STOCK_TICKER = 'AAPL'
 
 
 class VWAP(bt.Indicator):
     lines = ('vwap',)
-    params = (('period', 20),)
+    params = (('period', 5),)
 
     def __init__(self):
         self.addminperiod(self.params.period)
@@ -24,7 +24,7 @@ class MomentumStrategy(bt.Strategy):
         ("macd1", 8),
         ("macd2", 17),
         ("macdsig", 9),
-        ("rsi_period", 14),
+        ("rsi_period", 9),
         ("rsi_overbought", 70),
         ("rsi_oversold", 30),
         ("bb_period", 20),
@@ -32,18 +32,8 @@ class MomentumStrategy(bt.Strategy):
     )
 
     def __init__(self):
-        # Indicators
-        self.macd = bt.indicators.MACD(self.data.close,
-                                       period_me1=self.params.macd1,
-                                       period_me2=self.params.macd2,
-                                       period_signal=self.params.macdsig,
-                                       plot=False)
         self.rsi = bt.indicators.RelativeStrengthIndex(period=self.params.rsi_period)
-        self.bollinger = bt.indicators.BollingerBands(self.data.close,
-                                                      period=self.params.bb_period,
-                                                      devfactor=self.params.bb_stddev,
-                                                      plot=False)
-        self.vwap = VWAP(self.data, plot=False)
+        self.vwap = VWAP(self.data, plot=True)
         # To keep track of pending orders
         self.order = None
 
@@ -55,28 +45,20 @@ class MomentumStrategy(bt.Strategy):
         # Log the prices for this bar
         self.log(
             f'Open: {self.data.open[0]}, High: {self.data.high[0]}, Low: {self.data.low[0]}, Close: {self.data.close[0]}')
-        # Compute the differences
-        macd_diff = self.macd.macd[0] - self.macd.signal[0]
-        rsi_diff = self.params.rsi_oversold - self.rsi[0]
-
-        # Log the differences
-        self.log('MACD difference: %.2f, RSI difference: %.2f' % (macd_diff, rsi_diff))
 
         if not self.position:
-            if (self.macd.macd > self.macd.signal - 0.1) and \
-                    (self.rsi < self.params.rsi_oversold):
-                # and \
-                    # (self.data.close < self.bollinger.lines.bot) and \
-                    # (self.data.close < self.vwap):
+            if (self.rsi[0] < self.params.rsi_oversold) and \
+                    (self.data.close[0] < self.vwap):
                 self.log('BUY CREATE, %.2f' % self.data.close[0])
+                self.log(f'Buy condition met: RSI {self.rsi[0]} < {self.params.rsi_oversold}')
+                self.log(f'Buy condition met: Close price {self.data.close[0]} < VWAP {self.vwap[0]}')
                 self.order = self.buy()
         else:
-            if (self.macd.macd < self.macd.signal + 0.1) or \
-                    (self.rsi > self.params.rsi_overbought):
-                # or \
-                    # (self.data.close > self.bollinger.lines.top) or \
-                    # (self.data.close > self.vwap):
+            if (self.rsi[0] > self.params.rsi_overbought) and \
+                    (self.data.close[0] > self.vwap):
                 self.log('SELL CREATE, %.2f' % self.data.close[0])
+                self.log(f'Sell condition met: RSI {self.rsi[0]} > {self.params.rsi_overbought}')
+                self.log(f'Sell condition met: Close price {self.data.close[0]} > VWAP {self.vwap[0]}')
                 self.order = self.sell()
 
     def notify_order(self, order):
@@ -120,7 +102,6 @@ class MomentumStrategy(bt.Strategy):
         print(f'{dt}, {text}')
 
 
-
 if __name__ == "__main__":
     # Download data
     data = yf.download(STOCK_TICKER, START_DATE, END_DATE, interval='1m')
@@ -139,7 +120,7 @@ if __name__ == "__main__":
 
     # Set initial cash
     # Set our desired cash start
-    cerebro.broker.setcash(100000.0)
+    cerebro.broker.setcash(1000.0)
 
     # Set broker commission
     cerebro.broker.setcommission(commission=0.001)
@@ -171,5 +152,3 @@ if __name__ == "__main__":
     print('Average Trade Length: ' + format(average_trade_length, '.2f') + ' periods')
     print('Total Net Profit: $' + format(total_net_profit, '.2f'))
     cerebro.plot(style='candle', barup='green', bardown='red', fmt_x_data='%Y-%m-%d %H:%M:%S', volume=False)
-
-
